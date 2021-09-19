@@ -27,7 +27,7 @@ KNACK_API_KEY = os.getenv("KNACK_API_KEY")
 KNACK_APP_ID = os.getenv("KNACK_APP_ID")
 
 # config
-LOG_DIR = "log"
+LOG_DIR = "_log"
 IP_FIELD = "field_638"
 ID_FIELD = "field_947"
 MODEL_FIELD = "field_639"
@@ -115,11 +115,10 @@ async def worker(worker_id, queue, session, boto_client):
 
         # success or fail, the task is complete
         queue.task_done()
-        logger.debug(
-            f"Worker {worker_id} done with {camera.id}"
-        )
+        logger.debug(f"Worker {worker_id} done with {camera.id}")
         # send the camera to end of the queue
         await queue.put(camera)
+
 
 def load_fallback_img(fname):
     dirname = os.path.dirname(__file__)
@@ -140,7 +139,7 @@ async def main(max_workers, timeout):
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
-    
+
     queue = asyncio.Queue()
 
     # initialize the to-do queue
@@ -179,7 +178,7 @@ async def main(max_workers, timeout):
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def get_logger(name, level):
+def get_logger(name, log_dir_path, level):
     """Return a module logger that streams to stdout and to rotating file"""
     logger = logging.getLogger(name)
     formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s: %(message)s")
@@ -187,7 +186,7 @@ def get_logger(name, level):
     handler_stream.setFormatter(formatter)
     logger.addHandler(handler_stream)
     handler_file = logging.handlers.RotatingFileHandler(
-        "cctv.log", maxBytes=2000000, backupCount=5
+        f"{log_dir_path}/cctv.log", maxBytes=2000000, backupCount=5
     )
     handler_file.setFormatter(formatter)
     logger.addHandler(handler_file)
@@ -196,7 +195,9 @@ def get_logger(name, level):
 
 
 if __name__ == "__main__":
-    os.makedirs(LOG_DIR, exist_ok=True)
+    dirname = os.path.dirname(__file__)
+    log_dir_path = os.path.join(dirname, LOG_DIR)
+    os.makedirs(log_dir_path, exist_ok=True)
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -216,14 +217,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help=f"Sets logger to DEBUG level",
+        "-v", "--verbose", action="store_true", help=f"Sets logger to DEBUG level",
     )
     args = parser.parse_args()
 
     logger = get_logger(
-        "cctv_thumbnails", level=logging.DEBUG if args.verbose else logging.ERROR
+        "cctv_thumbnails",
+        log_dir_path,
+        level=logging.DEBUG if args.verbose else logging.ERROR,
     )
     asyncio.run(main(args.max_workers, args.timeout))
