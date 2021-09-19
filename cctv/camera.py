@@ -24,7 +24,7 @@ class Camera(object):
     def __repr__(self):
         return f"<Camera {self.ip}>"
 
-    def __init__(self, *, ip: str, id: int, model: str, download_error_limit=3):
+    def __init__(self, *, ip: str, id: int, model: str, fallback_img, download_error_limit=3):
         """Initialize camera
 
         Args:
@@ -46,6 +46,8 @@ class Camera(object):
         self.model = model
         self.ip = ip
         self.image = None
+        self.is_fallback_uploaded = False
+        self.fallback_img = fallback_img
         self.url = self._build_url()
         self.download_error_count = 0
         self.download_error_limit = download_error_limit
@@ -136,7 +138,7 @@ class Camera(object):
             return [resp.headers, content, resp.status, resp.reason]
 
     async def upload(self, boto_client: aiobotocore.AioSession) -> bool:
-        """Attempt to upload an image to S3.
+        """Attempt to upload an image to S3. If self.image is None, the fallback image is uploaded.
 
         Args:
             boto_client (aiobotocore.AioSession): The boto3 client session.
@@ -145,9 +147,16 @@ class Camera(object):
             bool: True if successful else False
         """
         try:
+            if not self.image and self.is_fallback_uploaded:
+                """ We want to avoid having stale images in S3. So the fallback image is uploaded if
+                no image is available. If it's already uploaded, we don't need to upload it again"""
+                return True
+
             resp = await boto_client.put_object(
-                Bucket=BUCKET, Key=f"{self.id}.jpg", Body=self.image
+                Bucket=BUCKET, Key=f"{self.id}.jpg", Body=self.image or self.fallback_img
             )
+            # reset the fallback image state if we've just uploaded a real image
+            self.is_fallback_uploaded = True if (resp and not self.image) else False
             return True if resp else False
         except Exception as e:
             logger.error(

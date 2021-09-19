@@ -3,6 +3,8 @@
 
 docker run --network host -it --rm --env-file env_file -v /home/publisher/atd-cctv-thumbnails:/app atddocker/atd-cctv-thumbnails /bin/bash
 docker run --network host -it --rm --env-file env_file -v /home/publisher/atd-cctv-thumbnails:/app atddocker/atd-cctv-thumbnails ./process_images.py
+sudo docker run --name cctv-images --network host -it --rm  --env-file /home/publisher/atd-cctv-images/env_file -v /home/publisher/atd-cctv-images:/app atddocker/atd-cctv-images cctv/process_images.py
+
 """
 import argparse
 import asyncio
@@ -31,6 +33,7 @@ ID_FIELD = "field_947"
 MODEL_FIELD = "field_639"
 NUM_WORKERS_DEFAULT = 30
 TIMEOUT_DEFAULT = 30
+FALLBACK_IMG_NAME = "unavailable.jpg"
 
 
 def get_camera_records():
@@ -44,7 +47,7 @@ def get_camera_records():
     return app.get(KNACK_CONTAINER)
 
 
-def create_camera(record):
+def create_camera(record, fallback_img):
     """Create Camera instances.
 
     Args:
@@ -59,7 +62,7 @@ def create_camera(record):
     if not ip or not camera_id or not model:
         logger.warning("Unable to create camera due to missing id, ip, or model")
         return None
-    return Camera(ip=ip, id=camera_id, model=model)
+    return Camera(ip=ip, id=camera_id, model=model, fallback_img=fallback_img)
 
 
 async def worker(worker_id, queue, session, boto_client):
@@ -92,7 +95,7 @@ async def worker(worker_id, queue, session, boto_client):
             return
 
         try:
-            download_success = await camera.download(session)
+            await camera.download(session)
         except Exception as e:
             """
             we don't know exactly what exceptions we'll need to handle. we have catches
@@ -102,25 +105,27 @@ async def worker(worker_id, queue, session, boto_client):
             logger.error(
                 f"MYSTERY FAILLLLLLED to fetch camera ID {camera.id}: {e.__class__}"
             )
-            download_success = False
 
-        upload_success = False
-        if download_success:
-            try:
-                upload_success = await camera.upload(boto_client)
-            except Exception as e:
-                logger.error(
-                    f"MYSTERY FAILLLLLLED UPLOAD camera ID {camera.id}: {e.__class__}"
-                )
-                upload_success = False
+        try:
+            await camera.upload(boto_client)
+        except Exception as e:
+            logger.error(
+                f"MYSTERY FAILLLLLLED UPLOAD camera ID {camera.id}: {e.__class__}"
+            )
 
         # success or fail, the task is complete
         queue.task_done()
         logger.debug(
-            f"Worker {worker_id} done with {camera.id} with {'success' if upload_success else 'failure'}"
+            f"Worker {worker_id} done with {camera.id}"
         )
         # send the camera to end of the queue
         await queue.put(camera)
+
+def load_fallback_img(fname):
+    dirname = os.path.dirname(__file__)
+    filepath = os.path.join(dirname, fname)
+    with open(filepath, "rb") as fin:
+        return fin.read()
 
 
 async def main(max_workers, timeout):
@@ -132,9 +137,10 @@ async def main(max_workers, timeout):
         max_workers (int): The number of concurrent workers
         timeout (int): The aiohttp session timeout (applied when downloading, not uploading images)
     """
+    fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
-    cameras = [create_camera(record) for record in cameras_knack]
-
+    cameras = [create_camera(record, fallback_img) for record in cameras_knack]
+    
     queue = asyncio.Queue()
 
     # initialize the to-do queue
