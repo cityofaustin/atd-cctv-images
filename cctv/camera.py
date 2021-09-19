@@ -150,8 +150,9 @@ class Camera(object):
             if not self.image and self.is_fallback_uploaded:
                 """ We want to avoid having stale images in S3. So the fallback image is uploaded if
                 no image is available. If it's already uploaded, we don't need to upload it again"""
+                logger.debug("Skipping fallback image for camera ID {self.id}")
                 return True
-
+            
             resp = await boto_client.put_object(
                 Bucket=BUCKET, Key=f"{self.id}.jpg", Body=self.image or self.fallback_img
             )
