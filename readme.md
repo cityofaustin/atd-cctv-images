@@ -1,6 +1,6 @@
 # atd-cctv-images
 
-🚧 this project is is under construction 🚧
+🚧 this project is under construction 🚧
 
 ## About
 
