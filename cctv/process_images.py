@@ -77,8 +77,8 @@ async def worker(worker_id, queue, session, boto_client):
     Args:
         worker_id (int): Unique/arbitrary ID of worker. Used merely for debug.
         queue (asyncio.Queue): The queue instance
-        session (aiohttp.ClientSession): The http session to use when fetching from cameras
-        boto_client (aiobotocore.Session): The (aio)boto3 session to use when
+        session (aiohttp.ClientSession): The aiohttp session to use when fetching from cameras
+        boto_client (aiobotocore.Session): The (aio)boto3 session to upload images
 
     Returns:
         None
