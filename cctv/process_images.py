@@ -11,7 +11,10 @@ import asyncio
 import logging
 import logging.handlers
 import os
+import random
 import sys
+
+from asyncio.unix_events import _compute_returncode
 
 import aiohttp
 import aiobotocore
@@ -31,10 +34,9 @@ LOG_DIR = "_log"
 IP_FIELD = "field_638"
 ID_FIELD = "field_947"
 MODEL_FIELD = "field_639"
-NUM_WORKERS_DEFAULT = 15
-TIMEOUT_DEFAULT = 60
 FALLBACK_IMG_NAME = "unavailable.jpg"
-
+TIMEOUT_DEFAULT = 60
+INITIAL_MAX_RANDOM_SLEEP = 300
 
 def get_camera_records():
     """Download camera records from Knack app.
@@ -43,8 +45,16 @@ def get_camera_records():
         list: list of knackpy.Records
     """
     logger.debug("Getting cameras from Knack...")
+    filters = {
+        "match": "and",
+        "rules": [
+            {"field": IP_FIELD, "operator": "is not blank"},
+            {"field": ID_FIELD, "operator": "is not blank"},
+            {"field": MODEL_FIELD, "operator": "is not blank"},
+        ],
+    }
     app = knackpy.App(app_id=KNACK_APP_ID, api_key=KNACK_API_KEY)
-    return app.get(KNACK_CONTAINER)
+    return app.get(KNACK_CONTAINER, filters=filters)
 
 
 def create_camera(record, fallback_img):
@@ -59,65 +69,47 @@ def create_camera(record, fallback_img):
     ip = record.get(IP_FIELD)
     camera_id = record.get(ID_FIELD)
     model = record.get(MODEL_FIELD)
-    if not ip or not camera_id or not model:
-        logger.warning("Unable to create camera due to missing id, ip, or model")
-        return None
     return Camera(ip=ip, id=camera_id, model=model, fallback_img=fallback_img)
 
 
-async def worker(worker_id, queue, session, boto_client):
-    """Worker which interacts with Camera task queue to fetch and upload images. The worker
-    pulls the next Camera in the queue, attempts to process it, and returns it to the queue
-    for future processing, creating an infinite loop of worker tasks processed in first in,
-    first out order.
+async def worker(camera: Camera, session, boto_client):
+    """ Looping task-worker which manges i/o for a Camera instance
 
     Exceptions must caught liberally to ensure that a worker does not reach an unhandled
     exception state—which would block the event loop and stop all other workers.
 
     Args:
-        worker_id (int): Unique/arbitrary ID of worker. Used merely for debug.
-        queue (asyncio.Queue): The queue instance
+        camera (Camera): The camera instance
         session (aiohttp.ClientSession): The aiohttp session to use when fetching from cameras
         boto_client (aiobotocore.Session): The (aio)boto3 session to upload images
 
     Returns:
         None
     """
+    # apply an initial random sleep to avoid overloading CPU with concurrent i/o on init
+    await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
     while True:
-        try:
-            camera = await queue.get()
-        except asyncio.QueueEmpty:
-            """
-            this can't happen, given that workers place cameras back in the queue when done,
-            and in any case an uncaught QueueEmpty would just terminate the worker. we're
-            just being verbose
-            """
+        if camera.is_disabled():
+            logger.debug(f"{camera.id} is disabled")
+            # terminate work if camera reaches disabled state
             return
 
         try:
             await camera.download(session)
         except Exception as e:
-            """
-            we don't know exactly what exceptions we'll need to handle. we have catches
-            in <Camera> to add detail. we must always log and move past exceptions because
-            they will block other workers
-            """
-            logger.error(
-                f"MYSTERY FAILLLLLLED to fetch camera ID {camera.id}: {e.__class__}"
-            )
+            logger.error(f"Camera {camera.id}: download: {e.__class__} {str(e)}")
 
         try:
+            # we upload regardless of if a new image was downloaded
+            # camera state determines if the fallback image should be uploaded
             await camera.upload(boto_client)
         except Exception as e:
-            logger.error(
-                f"MYSTERY FAILLLLLLED UPLOAD camera ID {camera.id}: {e.__class__}"
-            )
+            logger.error(f"Camera {camera.id}: upload: {str(e)}")
 
-        # success or fail, the task is complete
-        queue.task_done()
-        logger.debug(f"Worker {worker_id} done with {camera.id}")
-        # send the camera to end of the queue
-        await queue.put(camera)
+        logger.debug(f"done with {camera.id}")
+        
+        # sleep until
+        await camera.sleep()
 
 
 def load_fallback_img(fname):
@@ -127,25 +119,17 @@ def load_fallback_img(fname):
         return fin.read()
 
 
-async def main(max_workers, timeout):
+async def main(timeout):
     """Initates the infinite fetch/upload loop.
     Note that Knack camera asset records are only fetched once. This script must be restarted in order
     to check for new/modified cameras.
 
     Args:
-        max_workers (int): The number of concurrent workers
         timeout (int): The aiohttp session timeout (applied when downloading, not uploading images)
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
-
-    queue = asyncio.Queue()
-
-    # initialize the to-do queue
-    for cam in cameras:
-        if cam:
-            await queue.put(cam)
 
     tasks = []
 
@@ -162,20 +146,13 @@ async def main(max_workers, timeout):
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # create workers and tie them to the queue
-            for i in range(max_workers):
-                task_worker = worker(str(i), queue, session, boto_client)
+            for camera in cameras:
+                task_worker = worker(camera, session, boto_client)
                 task = asyncio.create_task(task_worker)
                 tasks.append(task)
 
-            # run tasks until the queue is empty
-            await queue.join()
-
-    # Clear our tasks: the program will not end until send the task-workers home
-    for task in tasks:
-        task.cancel()
-
-    # Wait until all worker tasks are cancelled.
-    await asyncio.gather(*tasks, return_exceptions=True)
+            # Wait until all worker tasks are cancelled.
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def get_logger(name, log_dir_path, level):
@@ -201,14 +178,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "-w",
-        "--max_workers",
-        type=int,
-        default=NUM_WORKERS_DEFAULT,
-        help=f"# of concurrent workers (default: {NUM_WORKERS_DEFAULT})",
-    )
-
-    parser.add_argument(
         "-t",
         "--timeout",
         type=int,
@@ -226,4 +195,4 @@ if __name__ == "__main__":
         log_dir_path,
         level=logging.DEBUG if args.verbose else logging.ERROR,
     )
-    asyncio.run(main(args.max_workers, args.timeout))
+    asyncio.run(main(args.timeout))
