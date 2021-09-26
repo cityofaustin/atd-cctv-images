@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """ Class to download images from a single CCTV camera and upload them to S3 """
 import asyncio
+import datetime
 import logging
 import os
+from time import mktime
+from wsgiref.handlers import format_date_time
 
 import aiobotocore
 import aiohttp
@@ -10,6 +13,7 @@ import aiohttp
 CAMERA_USERNAME = os.getenv("CAMERA_USERNAME")
 CAMERA_PASSWORD = os.getenv("CAMERA_PASSWORD")
 BUCKET = os.getenv("BUCKET")
+BUCKET_SUBDIR = "image"
 SLEEP_SECONDS = 300
 EXCEPTION_LIMIT = 5
 
@@ -23,7 +27,13 @@ class Camera(object):
         return f"<Camera '{self.ip}'>"
 
     def __init__(
-        self, *, ip: str, id: int, model: str, fallback_img: bytes, exception_limit=EXCEPTION_LIMIT
+        self,
+        *,
+        ip: str,
+        id: int,
+        model: str,
+        fallback_img: bytes,
+        exception_limit=EXCEPTION_LIMIT,
     ):
         """Initialize camera
 
@@ -80,6 +90,11 @@ class Camera(object):
     def is_disabled(self):
         return self.exception_count >= self.exception_limit
 
+    def _expiration_timestamp(self):
+        expires = datetime.datetime.now() + datetime.timedelta(0, SLEEP_SECONDS)
+        stamp = mktime(expires.timetuple())
+        return format_date_time(stamp)
+
     async def download(self, session: aiohttp.ClientSession) -> bool:
         """Attempt to download a jpeg image from the camera.
 
@@ -90,9 +105,7 @@ class Camera(object):
             bool: True if download successful, else False.
         """
         if self.is_disabled():
-            return self._raise_exception(
-                f"Disabled / at exception limit"
-            )
+            return self._raise_exception(f"Disabled / at exception limit")
 
         # clear image if held from previous download
         self.image = None
@@ -158,22 +171,18 @@ class Camera(object):
                 no image is available. If it's already uploaded, we don't need to upload it again"""
                 logger.debug(f"Skipping fallback image upload")
                 return True
-            
+
             logger.debug(f"Camera {self.id}: Uploading image")
 
             resp = await boto_client.put_object(
                 Bucket=BUCKET,
-                Key=f"{self.id}.jpg",
+                Key=f"{BUCKET_SUBDIR}/{self.id}.jpg",
                 Body=self.image or self.fallback_img,
                 ContentType="image/jpeg",
-                CacheControl=f"max-age={SLEEP_SECONDS}"
+                Expires=self._expiration_timestamp(),
             )
             # reset the fallback image state if we've just uploaded a real image
             self.is_fallback_uploaded = True if (resp and not self.image) else False
-            return (
-                True
-                if resp
-                else self._raise_exception("Unknown upload error")
-            )
+            return True if resp else self._raise_exception("Unknown upload error")
         except Exception as e:
             return self._raise_exception(f"Unable to upload image with {str(e)}")
