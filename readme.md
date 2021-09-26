@@ -58,6 +58,10 @@ Logs are configured to rotate at `1mb`. If you've mounted the log directory to t
 $ tail -f /var/log/cctv-images/cctv.log 
 ```
 
-## Development
+## Development and CI
 
-- `/dev/dummy_api.py` is a simple flask app that can be patched into `Camera` instances and used for development.
+`/dev/dummy_api.py` is a simple flask app that can be patched into `Camera` instances and used for development.
+
+Any push to the production branch will trigger a build/push action of the latest image to Docker Hub.
+
+The new image will have to be manually pulled to the production server and the container will need to be re-launched.
