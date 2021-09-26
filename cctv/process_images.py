@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-""" Async fetches traffic cctv image thumbnails and uploads to S3.
-
-docker run --network host -it --rm --env-file env_file -v /home/publisher/atd-cctv-thumbnails:/app atddocker/atd-cctv-thumbnails /bin/bash
-docker run --network host -it --rm --env-file env_file -v /home/publisher/atd-cctv-thumbnails:/app atddocker/atd-cctv-thumbnails ./process_images.py
-sudo docker run --name cctv-images --network host -it --rm  --env-file /home/publisher/atd-cctv-images/env_file -v /home/publisher/atd-cctv-images:/app atddocker/atd-cctv-images cctv/process_images.py
-
-"""
+""" Async fetches traffic cctv image thumbnails and uploads to S3"""
 import argparse
 import asyncio
 import logging
