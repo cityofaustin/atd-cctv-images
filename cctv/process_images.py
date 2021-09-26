@@ -34,9 +34,11 @@ LOG_DIR = "_log"
 IP_FIELD = "field_638"
 ID_FIELD = "field_947"
 MODEL_FIELD = "field_639"
+DISABLE_PUBLISH_FIELD = "field_1866"
 FALLBACK_IMG_NAME = "unavailable.jpg"
 TIMEOUT_DEFAULT = 60
 INITIAL_MAX_RANDOM_SLEEP = 300
+
 
 def get_camera_records():
     """Download camera records from Knack app.
@@ -51,6 +53,7 @@ def get_camera_records():
             {"field": IP_FIELD, "operator": "is not blank"},
             {"field": ID_FIELD, "operator": "is not blank"},
             {"field": MODEL_FIELD, "operator": "is not blank"},
+            {"field": DISABLE_PUBLISH_FIELD, "operator": "is not", "value": True},
         ],
     }
     app = knackpy.App(app_id=KNACK_APP_ID, api_key=KNACK_API_KEY)
@@ -107,7 +110,7 @@ async def worker(camera: Camera, session, boto_client):
             logger.error(f"Camera {camera.id}: upload: {str(e)}")
 
         logger.debug(f"done with {camera.id}")
-        
+
         # sleep until
         await camera.sleep()
 
