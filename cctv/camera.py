@@ -21,7 +21,7 @@ logger = logging.getLogger("cctv_thumbnails")
 
 
 class Camera(object):
-    """Async processor to fetch CCTV camera thumbnail images."""
+    """Async processor to download/upload CCTV camera thumbnail images"""
 
     def __repr__(self):
         return f"<Camera '{self.ip}'>"
@@ -33,7 +33,7 @@ class Camera(object):
         id: int,
         model: str,
         fallback_img: bytes,
-        exception_limit=EXCEPTION_LIMIT,
+        exception_limit: int = EXCEPTION_LIMIT,
     ):
         """Initialize camera
 
@@ -65,6 +65,9 @@ class Camera(object):
             is_fallback_uploaded (bool): If the fallback image has been uploaded. Used to 
                 avoid uploading the fallback image redundantly after repeated failuress. Reset
                 to False after a successful image upload.
+            url (str): The url endpoint of the camera
+            exception_count (int): The number of successive exceptions which have raised while
+                attempting to download/uploads. Reset after a successful download.
         """
         self.image = None
         self.is_fallback_uploaded = False
@@ -81,6 +84,7 @@ class Camera(object):
             return f"http://{self.ip}/jpeg?id=2"
 
     def _raise_exception(self, message):
+        """Raise an exception after increassing exception_count"""
         self.exception_count + 1
         raise Exception(message)
 
@@ -91,6 +95,10 @@ class Camera(object):
         return self.exception_count >= self.exception_limit
 
     def _expiration_timestamp(self):
+        """Formats an http-timestamp to be used in the `Expires` header. This header
+        is included in the S3 image upload, and is propagated through Cloudfront to
+        Cloudfront client requests.
+        """
         expires = datetime.datetime.now() + datetime.timedelta(0, SLEEP_SECONDS)
         stamp = mktime(expires.timetuple())
         return format_date_time(stamp)

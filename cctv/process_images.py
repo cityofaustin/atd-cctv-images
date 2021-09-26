@@ -65,9 +65,13 @@ def create_camera(record, fallback_img):
 
     Args:
         record (knackpy.Record): A knackpy.Record of the camera asset data
-
+        fallback_img (bytes): The image to be uploaded if no image can be downloaded. The
+        fallback image prevents stale images from persitsing in the S3 store.
     Returns:
-        Camera: Camera instance or none if insufficient data available
+        Camera: Camera instance
+
+    Raises:
+        ValueError: raised by <Camera > if not ip, id, or model
     """
     ip = record.get(IP_FIELD)
     camera_id = record.get(ID_FIELD)
@@ -75,8 +79,12 @@ def create_camera(record, fallback_img):
     return Camera(ip=ip, id=camera_id, model=model, fallback_img=fallback_img)
 
 
-async def worker(camera: Camera, session, boto_client):
-    """ Looping task-worker which manges i/o for a Camera instance
+async def worker(
+    camera: Camera, session: aiohttp.ClientSession, boto_client: aiobotocore.Session
+):
+    """ Task-worker which manages i/o for a Camera instance. runs on an infinite loop until a
+    camera becomes disabled, which happens if a camera upload/download fails repeatedly up
+    to its `exception_limit`.
 
     Exceptions must caught liberally to ensure that a worker does not reach an unhandled
     exception state—which would block the event loop and stop all other workers.
@@ -96,22 +104,17 @@ async def worker(camera: Camera, session, boto_client):
             logger.debug(f"{camera.id} is disabled")
             # terminate work if camera reaches disabled state
             return
-
         try:
             await camera.download(session)
         except Exception as e:
             logger.error(f"Camera {camera.id}: download: {e.__class__} {str(e)}")
-
         try:
             # we upload regardless of if a new image was downloaded
             # camera state determines if the fallback image should be uploaded
             await camera.upload(boto_client)
         except Exception as e:
             logger.error(f"Camera {camera.id}: upload: {str(e)}")
-
-        logger.debug(f"done with {camera.id}")
-
-        # sleep until
+        # pause for sleep duration
         await camera.sleep()
 
 
@@ -133,28 +136,25 @@ async def main(timeout):
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
-
     tasks = []
 
+    # wrap all connections in a single context, which is expensive to create
     timeout = aiohttp.ClientTimeout(total=timeout)
     session = aiobotocore.session.get_session()
 
-    # wrap all connections in sessions, which are expensive to create
     async with session.create_client(
         "s3",
         region_name="us-east-2",
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         aws_access_key_id=AWS_ACCESS_KEY_ID,
     ) as boto_client:
-
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            # create workers and tie them to the queue
+            # create workers and tie them to tasks
             for camera in cameras:
                 task_worker = worker(camera, session, boto_client)
                 task = asyncio.create_task(task_worker)
                 tasks.append(task)
-
-            # Wait until all worker tasks are cancelled.
+            # Concurrently run all tasks until they complete
             await asyncio.gather(*tasks, return_exceptions=True)
 
 
