@@ -80,7 +80,7 @@ def create_camera(record, fallback_img):
 
 
 async def worker(
-    camera: Camera, session: aiohttp.ClientSession, boto_client: aiobotocore.Session
+    camera: Camera, session: aiohttp.ClientSession, boto_client: aiobotocore.session.AioSession
 ):
     """ Task-worker which manages i/o for a Camera instance. runs on an infinite loop until a
     camera becomes disabled, which happens if a camera upload/download fails repeatedly up
@@ -92,7 +92,7 @@ async def worker(
     Args:
         camera (Camera): The camera instance
         session (aiohttp.ClientSession): The aiohttp session to use when fetching from cameras
-        boto_client (aiobotocore.Session): The (aio)boto3 session to upload images
+        boto_client (aiobotocore.session.AioSession): The (aio)boto3 session to upload images
 
     Returns:
         None
