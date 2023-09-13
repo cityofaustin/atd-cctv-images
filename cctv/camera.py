@@ -80,7 +80,7 @@ class Camera(object):
         if self.model.lower() == "advidia":
             auth = f"{CAMERA_USERNAME}:{CAMERA_PASSWORD}"
             return f"http://{auth}@{self.ip}/ISAPI/Streaming/channels/101/picture"
-        elif self.model.lower() == "hanwha":
+        elif self.model.lower() == "wisenet":
             return f"http://{self.ip}/stw-cgi/video.cgi?msubmenu=snapshot&action=view&Profile=1&Channel=0"
         else:
             return f"http://{self.ip}/jpeg?id=2"
@@ -140,7 +140,7 @@ class Camera(object):
         )
 
         # Digest auth for hanwha cameras
-        if self.model.lower() == "hanwha":
+        if self.model.lower() == "wisenet":
             auth = httpx.DigestAuth(CAMERA_USERNAME, CAMERA_PASSWORD)
         else:
             auth = None
