@@ -145,7 +145,7 @@ class Camera(object):
         else:
             auth = None
 
-        async with session.get(self.url, auth=auth) as response:
+        async with session.get(self.url) as response:
             try:
                 response.raise_for_status()
             except Exception as e:

@@ -8,7 +8,7 @@ import os
 import random
 import sys
 
-from asyncio.unix_events import _compute_returncode
+# from asyncio.unix_events import _compute_returncode
 
 import httpx
 import aiobotocore
@@ -31,7 +31,7 @@ MODEL_FIELD = "field_639"
 DISABLE_PUBLISH_FIELD = "field_1866"
 FALLBACK_IMG_NAME = "unavailable.jpg"
 TIMEOUT_DEFAULT = 180
-INITIAL_MAX_RANDOM_SLEEP = 300
+INITIAL_MAX_RANDOM_SLEEP = 2
 
 
 def get_camera_records():
@@ -107,7 +107,8 @@ async def worker(
         try:
             # we upload regardless of if a new image was downloaded
             # camera state determines if the fallback image should be uploaded
-            await camera.upload(boto_client)
+            # await camera.upload(boto_client)
+            pass
         except Exception as e:
             logger.error(f"Camera {camera.id}: upload: {str(e)}")
         # pause for sleep duration
@@ -131,6 +132,8 @@ async def main(timeout):
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
+    filter_ids = [739]
+    cameras_knack = [item for item in cameras_knack if item.data[ID_FIELD] in filter_ids]
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
     tasks = []
 

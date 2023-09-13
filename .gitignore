@@ -142,3 +142,4 @@ cython_debug/
 .DS_Store
 env_file
 _log/
+.idea/
