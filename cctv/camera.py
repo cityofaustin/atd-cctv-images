@@ -8,7 +8,7 @@ from time import mktime
 from wsgiref.handlers import format_date_time
 
 import aiobotocore
-import aiohttp
+import httpx
 
 CAMERA_USERNAME = os.getenv("CAMERA_USERNAME")
 CAMERA_PASSWORD = os.getenv("CAMERA_PASSWORD")
@@ -80,6 +80,8 @@ class Camera(object):
         if self.model.lower() == "advidia":
             auth = f"{CAMERA_USERNAME}:{CAMERA_PASSWORD}"
             return f"http://{auth}@{self.ip}/ISAPI/Streaming/channels/101/picture"
+        elif self.model.lower() == "hanwha":
+            return f"http://{self.ip}/stw-cgi/video.cgi?msubmenu=snapshot&action=view&Profile=1&Channel=0"
         else:
             return f"http://{self.ip}/jpeg?id=2"
 
@@ -103,11 +105,11 @@ class Camera(object):
         stamp = mktime(expires.timetuple())
         return format_date_time(stamp)
 
-    async def download(self, session: aiohttp.ClientSession) -> bool:
+    async def download(self, session: httpx.AsyncClient) -> bool:
         """Attempt to download a jpeg image from the camera.
 
         Args:
-            session (aiohttp.ClientSession): The client's http session
+            session (httpx.AsyncClient): The client's httpx session
 
         Returns:
             bool: True if download successful, else False.
@@ -124,11 +126,11 @@ class Camera(object):
         self.exception_count = 0
         return True
 
-    async def _download(self, session: aiohttp.ClientSession) -> list:
+    async def _download(self, session: httpx.AsyncClient) -> list:
         """Download an image from the camera.
 
         Args:
-            session (aiohttp.ClientSession): The http client session
+            session (httpx.AsyncClient): The httpx client session
 
         Returns:
             list: [response header, response content, response status, ressponse reason]
@@ -136,9 +138,15 @@ class Camera(object):
         logger.debug(
             f"Downloading image from camera ID {self.id} {self.ip} {self.model}"
         )
-        async with session.get(self.url) as response:
-            try:
 
+        # Digest auth for hanwha cameras
+        if self.model.lower() == "hanwha":
+            auth = httpx.DigestAuth(CAMERA_USERNAME, CAMERA_PASSWORD)
+        else:
+            auth = None
+
+        async with session.get(self.url, auth=auth) as response:
+            try:
                 response.raise_for_status()
             except Exception as e:
                 if response.status < 500:
@@ -175,8 +183,9 @@ class Camera(object):
         """
         try:
             if not self.image and self.is_fallback_uploaded:
-                """ We want to avoid having stale images in S3. So the fallback image is uploaded if
-                no image is available. If it's already uploaded, we don't need to upload it again"""
+                """We want to avoid having stale images in S3. So the fallback image is uploaded if
+                no image is available. If it's already uploaded, we don't need to upload it again
+                """
                 logger.debug(f"Skipping fallback image upload")
                 return True
 
