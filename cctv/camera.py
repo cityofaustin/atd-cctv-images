@@ -12,6 +12,8 @@ import httpx
 
 CAMERA_USERNAME = os.getenv("CAMERA_USERNAME")
 CAMERA_PASSWORD = os.getenv("CAMERA_PASSWORD")
+WISENET_USERNAME = os.getenv("WISENET_USERNAME")
+WISENET_PASSWORD = os.getenv("WISENET_PASSWORD")
 BUCKET = os.getenv("BUCKET")
 BUCKET_SUBDIR = "image"
 SLEEP_SECONDS = 300
@@ -139,38 +141,35 @@ class Camera(object):
             f"Downloading image from camera ID {self.id} {self.ip} {self.model}"
         )
 
-        # Digest auth for hanwha cameras
+        # Digest auth for hanwha AKA wisenet cameras
         if self.model.lower() == "wisenet":
-            auth = httpx.DigestAuth(CAMERA_USERNAME, CAMERA_PASSWORD)
+            auth = httpx.DigestAuth(WISENET_USERNAME, WISENET_PASSWORD)
         else:
             auth = None
 
-        async with session.get(self.url) as response:
-            try:
-                response.raise_for_status()
-            except Exception as e:
-                if response.status < 500:
-                    # there's no reason to re-try 4xx errors, so trigger disabled state
-                    self.exception_count = self.exception_limit
-                return self._raise_exception(
-                    f"Failed to fetch with status {response.status} {response.reason} ({e.__class__})",
-                )
-
-            try:
-                # note some cameras return a semicolon or charset definition in the content-type
-                assert "image" in response.headers["content-type"]
-            except AssertionError:
-                # response is not an image
-                return self._raise_exception(
-                    f"Unexpected Content-Type: {response.headers['content-type']}"
-                )
-
-            except (TypeError, KeyError) as e:
-                # if the headers is of unexpected type or missing content-type header
-                # unsure why this happens, but it has
-                return self._raise_exception("Missing/invlaid header")
-
-            return await response.content.read()
+        response = await session.get(self.url, auth=auth)
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            if response.status < 500:
+                # there's no reason to re-try 4xx errors, so trigger disabled state
+                self.exception_count = self.exception_limit
+            return self._raise_exception(
+                f"Failed to fetch with status {response.status} {response.reason} ({e.__class__})",
+            )
+        try:
+            # note some cameras return a semicolon or charset definition in the content-type
+            assert "image" in response.headers["content-type"]
+        except AssertionError:
+            # response is not an image
+            return self._raise_exception(
+                f"Unexpected Content-Type: {response.headers['content-type']}"
+            )
+        except (TypeError, KeyError) as e:
+            # if the headers is of unexpected type or missing content-type header
+            # unsure why this happens, but it has
+            return self._raise_exception("Missing/invlaid header")
+        return response.content
 
     async def upload(self, boto_client: aiobotocore.AioSession) -> bool:
         """Attempt to upload an image to S3. If self.image is None, the fallback image is uploaded.
