@@ -2,7 +2,7 @@
 
 ## About
 
-Austin Transportation operates nearly 1,000 traffic cameras, which are used by the City's [Mobility Management Center](https://www.austintexas.gov/department/arterial-management) to monitor and address traffic issues in real time. The camera feeds are not recorded, and they are not used for law enforcement activites.
+Austin Transportation operates nearly 1,000 traffic cameras, which are used by the City's [Mobility Management Center](https://www.austintexas.gov/department/arterial-management) to monitor and address traffic issues in real time. The camera feeds are not recorded, and they are not used for law enforcement activities.
 
 Although operations staff have access to live camera feeds, we have found it valuable to make intermittently-updated camera images available at a public HTTP endpoint. These images are incorporated into our own [operations dashboards](https://data.mobiltiy.austin.gov) and serve as a resource to the public, researchers, and 3rd-party services.
 
