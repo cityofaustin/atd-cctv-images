@@ -106,7 +106,6 @@ async def worker(
             # we upload regardless of if a new image was downloaded
             # camera state determines if the fallback image should be uploaded
             await camera.upload(boto_client)
-            pass
         except Exception as e:
             logger.error(f"Camera {camera.id}: upload: {str(e)}")
         # pause for sleep duration
