@@ -62,6 +62,13 @@ class Camera(object):
         self.fallback_img = fallback_img
         self.exception_limit = exception_limit
 
+        # Digest auth for Hanwha AKA Wisenet cameras
+        if self.model.lower() == "wisenet":
+            self.auth = httpx.DigestAuth(WISENET_USERNAME, WISENET_PASSWORD)
+        else:
+            # authentication is build into the url for the rest of manufacturers
+            self.auth = None
+
         """Camera state
             image (bytes): The image to upload. Reset to `None` before each new download attempt
             is_fallback_uploaded (bool): If the fallback image has been uploaded. Used to 
@@ -141,21 +148,19 @@ class Camera(object):
             f"Downloading image from camera ID {self.id} {self.ip} {self.model}"
         )
 
-        # Digest auth for hanwha AKA wisenet cameras
-        if self.model.lower() == "wisenet":
-            auth = httpx.DigestAuth(WISENET_USERNAME, WISENET_PASSWORD)
-        else:
-            auth = None
-
-        response = await session.get(self.url, auth=auth)
         try:
+            response = await session.get(self.url, auth=self.auth)
             response.raise_for_status()
-        except Exception as e:
-            if response.status < 500:
+        except httpx.RequestError as exc:
+            return self._raise_exception(
+                f"Request error to {exc.request.url}({exc.__class__})",
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
                 # there's no reason to re-try 4xx errors, so trigger disabled state
                 self.exception_count = self.exception_limit
             return self._raise_exception(
-                f"Failed to fetch with status {response.status} {response.reason} ({e.__class__})",
+                f"Failed to fetch with status {exc.response.status_code} {exc.response.reason_phrase} ({exc.__class__})",
             )
         try:
             # note some cameras return a semicolon or charset definition in the content-type

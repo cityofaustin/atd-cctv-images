@@ -65,7 +65,7 @@ def create_camera(record, fallback_img):
     Raises:
         ValueError: raised by <Camera > if not ip, id, or model
     """
-    ip = record.get(IP_FIELD)
+    ip = record.get(IP_FIELD).strip()
     camera_id = record.get(ID_FIELD)
     model = record.get(MODEL_FIELD)
     return Camera(ip=ip, id=camera_id, model=model, fallback_img=fallback_img)
@@ -130,9 +130,6 @@ async def main(timeout):
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
-    # filter_ids = [739, 1]
-    # cameras_knack = [item for item in cameras_knack if item.data[ID_FIELD] in filter_ids]
-    cameras_knack = [item for item in cameras_knack if item.data[MODEL_FIELD] == "Wisenet"]
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
     tasks = []
 
