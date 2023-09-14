@@ -1,4 +1,4 @@
 aiohttp==3.7.*
 knackpy==1.0.*
 aiobotocore==1.4.*
-httpx
+httpx==1.0.*
