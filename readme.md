@@ -14,7 +14,7 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 - The [public traffic camera dataset](https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb) provides a listing of all available cameras
 
-- The [traffic cameras dashboards](https://data.mobiltiy.austin.gov) is a map for searching/viewing cameras
+- The [traffic cameras dashboards](https://data.mobility.austin.gov/traffic-cameras) is a map for searching/viewing cameras
 
 ## Design
 
