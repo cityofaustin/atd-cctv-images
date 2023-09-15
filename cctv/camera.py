@@ -8,10 +8,12 @@ from time import mktime
 from wsgiref.handlers import format_date_time
 
 import aiobotocore
-import aiohttp
+import httpx
 
 CAMERA_USERNAME = os.getenv("CAMERA_USERNAME")
 CAMERA_PASSWORD = os.getenv("CAMERA_PASSWORD")
+WISENET_USERNAME = os.getenv("WISENET_USERNAME")
+WISENET_PASSWORD = os.getenv("WISENET_PASSWORD")
 BUCKET = os.getenv("BUCKET")
 BUCKET_SUBDIR = "image"
 SLEEP_SECONDS = 300
@@ -60,6 +62,13 @@ class Camera(object):
         self.fallback_img = fallback_img
         self.exception_limit = exception_limit
 
+        # Digest auth for Hanwha AKA Wisenet cameras
+        if self.model.lower() == "wisenet":
+            self.auth = httpx.DigestAuth(WISENET_USERNAME, WISENET_PASSWORD)
+        else:
+            # authentication is build into the url for the rest of manufacturers
+            self.auth = None
+
         """Camera state
             image (bytes): The image to upload. Reset to `None` before each new download attempt
             is_fallback_uploaded (bool): If the fallback image has been uploaded. Used to 
@@ -80,6 +89,8 @@ class Camera(object):
         if self.model.lower() == "advidia":
             auth = f"{CAMERA_USERNAME}:{CAMERA_PASSWORD}"
             return f"http://{auth}@{self.ip}/ISAPI/Streaming/channels/101/picture"
+        elif self.model.lower() == "wisenet":
+            return f"http://{self.ip}/stw-cgi/video.cgi?msubmenu=snapshot&action=view&Profile=1&Channel=0"
         else:
             return f"http://{self.ip}/jpeg?id=2"
 
@@ -103,11 +114,11 @@ class Camera(object):
         stamp = mktime(expires.timetuple())
         return format_date_time(stamp)
 
-    async def download(self, session: aiohttp.ClientSession) -> bool:
+    async def download(self, session: httpx.AsyncClient) -> bool:
         """Attempt to download a jpeg image from the camera.
 
         Args:
-            session (aiohttp.ClientSession): The client's http session
+            session (httpx.AsyncClient): The client's httpx session
 
         Returns:
             bool: True if download successful, else False.
@@ -124,11 +135,11 @@ class Camera(object):
         self.exception_count = 0
         return True
 
-    async def _download(self, session: aiohttp.ClientSession) -> list:
+    async def _download(self, session: httpx.AsyncClient) -> list:
         """Download an image from the camera.
 
         Args:
-            session (aiohttp.ClientSession): The http client session
+            session (httpx.AsyncClient): The httpx client session
 
         Returns:
             list: [response header, response content, response status, ressponse reason]
@@ -136,33 +147,34 @@ class Camera(object):
         logger.debug(
             f"Downloading image from camera ID {self.id} {self.ip} {self.model}"
         )
-        async with session.get(self.url) as response:
-            try:
 
-                response.raise_for_status()
-            except Exception as e:
-                if response.status < 500:
-                    # there's no reason to re-try 4xx errors, so trigger disabled state
-                    self.exception_count = self.exception_limit
-                return self._raise_exception(
-                    f"Failed to fetch with status {response.status} {response.reason} ({e.__class__})",
-                )
-
-            try:
-                # note some cameras return a semicolon or charset definition in the content-type
-                assert "image" in response.headers["content-type"]
-            except AssertionError:
-                # response is not an image
-                return self._raise_exception(
-                    f"Unexpected Content-Type: {response.headers['content-type']}"
-                )
-
-            except (TypeError, KeyError) as e:
-                # if the headers is of unexpected type or missing content-type header
-                # unsure why this happens, but it has
-                return self._raise_exception("Missing/invlaid header")
-
-            return await response.content.read()
+        try:
+            response = await session.get(self.url, auth=self.auth)
+            response.raise_for_status()
+        except httpx.RequestError as exc:
+            return self._raise_exception(
+                f"Request error to {exc.request.url}({exc.__class__})",
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
+                # there's no reason to re-try 4xx errors, so trigger disabled state
+                self.exception_count = self.exception_limit
+            return self._raise_exception(
+                f"Failed to fetch with status {exc.response.status_code} {exc.response.reason_phrase} ({exc.__class__})",
+            )
+        try:
+            # note some cameras return a semicolon or charset definition in the content-type
+            assert "image" in response.headers["content-type"]
+        except AssertionError:
+            # response is not an image
+            return self._raise_exception(
+                f"Unexpected Content-Type: {response.headers['content-type']}"
+            )
+        except (TypeError, KeyError) as e:
+            # if the headers is of unexpected type or missing content-type header
+            # unsure why this happens, but it has
+            return self._raise_exception("Missing/invlaid header")
+        return response.content
 
     async def upload(self, boto_client: aiobotocore.AioSession) -> bool:
         """Attempt to upload an image to S3. If self.image is None, the fallback image is uploaded.
@@ -175,8 +187,9 @@ class Camera(object):
         """
         try:
             if not self.image and self.is_fallback_uploaded:
-                """ We want to avoid having stale images in S3. So the fallback image is uploaded if
-                no image is available. If it's already uploaded, we don't need to upload it again"""
+                """We want to avoid having stale images in S3. So the fallback image is uploaded if
+                no image is available. If it's already uploaded, we don't need to upload it again
+                """
                 logger.debug(f"Skipping fallback image upload")
                 return True
 

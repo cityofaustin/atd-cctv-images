@@ -8,9 +8,7 @@ import os
 import random
 import sys
 
-from asyncio.unix_events import _compute_returncode
-
-import aiohttp
+import httpx
 import aiobotocore
 import knackpy
 
@@ -67,16 +65,18 @@ def create_camera(record, fallback_img):
     Raises:
         ValueError: raised by <Camera > if not ip, id, or model
     """
-    ip = record.get(IP_FIELD)
+    ip = record.get(IP_FIELD).strip()
     camera_id = record.get(ID_FIELD)
     model = record.get(MODEL_FIELD)
     return Camera(ip=ip, id=camera_id, model=model, fallback_img=fallback_img)
 
 
 async def worker(
-    camera: Camera, session: aiohttp.ClientSession, boto_client: aiobotocore.session.AioSession
+    camera: Camera,
+    session: httpx.AsyncClient,
+    boto_client: aiobotocore.session.AioSession,
 ):
-    """ Task-worker which manages i/o for a Camera instance. runs on an infinite loop until a
+    """Task-worker which manages i/o for a Camera instance. runs on an infinite loop until a
     camera becomes disabled, which happens if a camera upload/download fails repeatedly up
     to its `exception_limit`.
 
@@ -85,7 +85,7 @@ async def worker(
 
     Args:
         camera (Camera): The camera instance
-        session (aiohttp.ClientSession): The aiohttp session to use when fetching from cameras
+        session (httpx.AsyncClient): The httpx session to use when fetching from cameras
         boto_client (aiobotocore.session.AioSession): The (aio)boto3 session to upload images
 
     Returns:
@@ -125,7 +125,7 @@ async def main(timeout):
     to check for new/modified cameras.
 
     Args:
-        timeout (int): The aiohttp session timeout (applied when downloading, not uploading images)
+        timeout (int): The httpx session timeout (applied when downloading, not uploading images)
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     cameras_knack = get_camera_records()
@@ -133,7 +133,7 @@ async def main(timeout):
     tasks = []
 
     # wrap all connections in a single context, which is expensive to create
-    timeout = aiohttp.ClientTimeout(total=timeout)
+    timeout = httpx.Timeout(timeout)
     session = aiobotocore.session.get_session()
 
     async with session.create_client(
@@ -142,7 +142,7 @@ async def main(timeout):
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         aws_access_key_id=AWS_ACCESS_KEY_ID,
     ) as boto_client:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with httpx.AsyncClient(timeout=timeout) as session:
             # create workers and tie them to tasks
             for camera in cameras:
                 task_worker = worker(camera, session, boto_client)
@@ -183,7 +183,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help=f"Sets logger to DEBUG level",
+        "-v",
+        "--verbose",
+        action="store_true",
+        help=f"Sets logger to DEBUG level",
     )
     args = parser.parse_args()
 

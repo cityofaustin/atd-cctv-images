@@ -2,7 +2,7 @@
 
 ## About
 
-Austin Transportation operates nearly 1,000 traffic cameras, which are used by the City's [Mobility Management Center](https://www.austintexas.gov/department/arterial-management) to monitor and address traffic issues in real time. The camera feeds are not recorded, and they are not used for law enforcement activites.
+Austin Transportation operates nearly 1,000 traffic cameras, which are used by the City's [Mobility Management Center](https://www.austintexas.gov/department/arterial-management) to monitor and address traffic issues in real time. The camera feeds are not recorded, and they are not used for law enforcement activities.
 
 Although operations staff have access to live camera feeds, we have found it valuable to make intermittently-updated camera images available at a public HTTP endpoint. These images are incorporated into our own [operations dashboards](https://data.mobiltiy.austin.gov) and serve as a resource to the public, researchers, and 3rd-party services.
 
@@ -14,13 +14,13 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 - The [public traffic camera dataset](https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb) provides a listing of all available cameras
 
-- The [traffic cameras dashboards(https://data.mobiltiy.austin.gov) is a map for searching/viewing cameras
+- The [traffic cameras dashboards](https://data.mobility.austin.gov/traffic-cameras) is a map for searching/viewing cameras
 
 ## Design
 
-The image processing is designed to be resilient to various connectivty and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially hault all concurrent tasks.
+The image processing is designed to be resilient to various connectivity and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially hault all concurrent tasks.
 
-The code relies on Python's [asyncio](https://docs.python.org/3/library/asyncio.html) ecosystem to achieve fast processing of hundreds of images per minute. The primary script--`process_images.py`--initaties concurrent, looping [`tasks`](https://docs.python.org/3/library/asyncio-task.html#task-object) which fetch and upload images from cameras.
+The code relies on Python's [asyncio](https://docs.python.org/3/library/asyncio.html) ecosystem to achieve fast processing of hundreds of images per minute. The primary script--`process_images.py`--initiates concurrent, looping [`tasks`](https://docs.python.org/3/library/asyncio-task.html#task-object) which fetch and upload images from cameras.
 
 Camera IDs, IP addresses, and model info are managed in a Knack application. These records are fetched once on initialization, and the script musts be restarted if camera records need to be refreshed.
 
@@ -35,11 +35,13 @@ Configure environmental variables:
 - `BUCKET`: The AWS destination bucket
 - `CAMERA_USERNAME`: The CCTV camera username
 - `CAMERA_PASSWORD`: The CCTV camera password
+- `WISENET_USERNAME`: Username specifically for Wisenet CCTV cameras
+- `WISENET_PASSWORD`: Password specifically for Wisenet CCTV cameras
 - `KNACK_APP_ID`: The Knack APP ID which hosts the camera asset records
 - `KNACK_API_KEY`: The knack APP API key
-- `KNACK_CONTAINER`: The Knack container (aka, view ID) which exposes the asset recordss
+- `KNACK_CONTAINER`: The Knack container (aka, view ID) which exposes the asset records
 
-The `launch.sh` script available in `/scripts` will launch a docker container that initates `cctv/processs-images.py`. It also does the work of loading environmental variabless and mounting the log directory:
+The `launch.sh` script available in `/scripts` will launch a docker container that initiates `cctv/processs-images.py`. It also does the work of loading environmental variables and mounting the log directory:
 
 ```shell
 sudo docker run --name cctv-images \
