@@ -95,7 +95,7 @@ class Camera(object):
             return f"http://{self.ip}/jpeg?id=2"
 
     def _raise_exception(self, message):
-        """Raise an exception after increassing exception_count"""
+        """Raise an exception after increasing exception_count"""
         self.exception_count + 1
         raise Exception(message)
 
