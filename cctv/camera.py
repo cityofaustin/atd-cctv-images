@@ -96,7 +96,7 @@ class Camera(object):
 
     def _raise_exception(self, message):
         """Raise an exception after increasing exception_count"""
-        self.exception_count + 1
+        self.exception_count += 1
         raise Exception(message)
 
     async def sleep(self):
@@ -104,6 +104,10 @@ class Camera(object):
 
     def is_disabled(self):
         return self.exception_count >= self.exception_limit
+
+    def disable_camera(self):
+        self.image = None
+        self.exception_count += self.exception_limit
 
     def _expiration_timestamp(self):
         """Formats an http-timestamp to be used in the `Expires` header. This header
