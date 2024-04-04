@@ -124,10 +124,11 @@ async def worker(
         await camera.sleep()
 
 
-async def update_camera_stack(app, cameras):
+async def update_camera_stack(app, cameras, session, boto_client):
     """
     Checks Knack to see if the camera has been disabled by TPW staff.
     """
+    fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
     while True:
         logger.debug("Checking for disabled cameras from Knack...")
@@ -142,8 +143,22 @@ async def update_camera_stack(app, cameras):
 
         # refreshing our list of cameras
         cameras = [camera for camera in cameras if not camera.is_disabled()]
-        await asyncio.sleep(SLEEP_SECONDS)
 
+        # Now, check for cameras that were recently added or enabled
+        cameras_knack = get_camera_records(app, get_disabled=False)
+        cam_ids = [camera.id for camera in cameras]
+        for cam_data in cameras_knack:
+            cam_id = cam_data.get(ID_FIELD)
+            if cam_id not in cam_ids:
+                logger.debug(f"Camera {cam_id} was re-enabled by Knack.")
+                cam_obj = create_camera(cam_data, fallback_img)
+                cam_worker = worker(cam_obj, session, boto_client)
+                cam_task = asyncio.create_task(cam_worker)
+                event_loop = asyncio.get_event_loop()
+                asyncio.ensure_future(cam_task, loop=event_loop)
+                cameras.append(cam_obj)
+
+        await asyncio.sleep(SLEEP_SECONDS)
 
 def load_fallback_img(fname):
     dirname = os.path.dirname(__file__)
@@ -183,7 +198,7 @@ async def main(timeout):
                 task = asyncio.create_task(task_worker)
                 tasks.append(task)
             # Task to check knack to see if any new cameras were disabled
-            knack_worker = update_camera_stack(app, cameras)
+            knack_worker = update_camera_stack(app, cameras, session, boto_client)
             knack_task = asyncio.create_task(knack_worker)
             tasks.append(knack_task)
             # Concurrently run all tasks until they complete
