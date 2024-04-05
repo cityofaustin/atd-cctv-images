@@ -106,6 +106,9 @@ class Camera(object):
         return self.exception_count >= self.exception_limit
 
     def disable_camera(self):
+        """
+        Disables camera by increasing the exception count to the limit and removing any stored image.
+        """
         self.image = None
         self.exception_count += self.exception_limit
 

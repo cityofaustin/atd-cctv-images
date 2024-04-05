@@ -35,7 +35,9 @@ INITIAL_MAX_RANDOM_SLEEP = 300
 
 def get_camera_records(app, get_disabled=False):
     """Download camera records from Knack app.
-
+    Args:
+        app: knackpy app object
+        get_disabled: if True, return disabled camera records instead
     Returns:
         list: list of knackpy.Records
     """
@@ -82,9 +84,9 @@ def create_camera(record, fallback_img):
 
 
 async def worker(
-        camera: Camera,
-        session: httpx.AsyncClient,
-        boto_client: aiobotocore.session.AioSession,
+    camera: Camera,
+    session: httpx.AsyncClient,
+    boto_client: aiobotocore.session.AioSession,
 ):
     """Task-worker which manages i/o for a Camera instance. runs on an infinite loop until a
     camera becomes disabled, which happens if a camera upload/download fails repeatedly up
@@ -126,13 +128,19 @@ async def worker(
 
 async def update_camera_stack(app, cameras, session, boto_client):
     """
-    Checks Knack to see if the camera has been disabled by TPW staff.
+    Checks Knack to see if any cameras have been disabled or re-enabled by TPW staff.
+    Args:
+        app: knackpy app object
+        cameras: list of Camera objects
+        session (httpx.AsyncClient): The httpx session to use when fetching from cameras
+        boto_client (aiobotocore.session.AioSession): The (aio)boto3 session to upload images
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
     await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
     while True:
         logger.debug("Checking for disabled cameras from Knack...")
         cameras_knack = get_camera_records(app, get_disabled=True)
+        # Checking our published cameras to see if they were disabled
         for cam_data in cameras_knack:
             if cam_data.get(DISABLE_PUBLISH_FIELD):
                 cam_id = cam_data.get(ID_FIELD)
@@ -160,6 +168,7 @@ async def update_camera_stack(app, cameras, session, boto_client):
 
         await asyncio.sleep(SLEEP_SECONDS)
 
+
 def load_fallback_img(fname):
     dirname = os.path.dirname(__file__)
     filepath = os.path.join(dirname, fname)
@@ -186,10 +195,10 @@ async def main(timeout):
     session = aiobotocore.session.get_session()
 
     async with session.create_client(
-            "s3",
-            region_name="us-east-2",
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
+        "s3",
+        region_name="us-east-2",
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
     ) as boto_client:
         async with httpx.AsyncClient(timeout=timeout) as session:
             # create workers and tie them to tasks
@@ -197,7 +206,7 @@ async def main(timeout):
                 task_worker = worker(camera, session, boto_client)
                 task = asyncio.create_task(task_worker)
                 tasks.append(task)
-            # Task to check knack to see if any new cameras were disabled
+            # Task to check knack to see if any cameras were added or removed
             knack_worker = update_camera_stack(app, cameras, session, boto_client)
             knack_task = asyncio.create_task(knack_worker)
             tasks.append(knack_task)
