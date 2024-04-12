@@ -139,7 +139,14 @@ async def update_camera_stack(app, cameras, session, boto_client):
     await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
     while True:
         logger.debug("Checking for disabled cameras from Knack...")
-        cameras_knack = get_camera_records(app, get_disabled=True)
+
+        try:
+            cameras_knack = get_camera_records(app, get_disabled=True)
+        except Exception as e:
+            logger.debug("Error trying to fetch camera data from Knack, skipping updating.")
+            await asyncio.sleep(SLEEP_SECONDS)
+            continue
+
         # Checking our published cameras to see if they were disabled
         for cam_data in cameras_knack:
             if cam_data.get(DISABLE_PUBLISH_FIELD):
