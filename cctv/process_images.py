@@ -140,10 +140,13 @@ async def update_camera_stack(app, cameras, session, boto_client):
     while True:
         logger.debug("Checking for disabled cameras from Knack...")
 
+        # getting disabled camera records from Knack
         try:
             cameras_knack = get_camera_records(app, get_disabled=True)
         except Exception as e:
+            # if we get an API error from Knack, just skip updating.
             logger.debug("Error trying to fetch camera data from Knack, skipping updating.")
+            logger.debug(e)
             await asyncio.sleep(SLEEP_SECONDS)
             continue
 
@@ -160,7 +163,15 @@ async def update_camera_stack(app, cameras, session, boto_client):
         cameras = [camera for camera in cameras if not camera.is_disabled()]
 
         # Now, check for cameras that were recently added or enabled
-        cameras_knack = get_camera_records(app, get_disabled=False)
+        try:
+            cameras_knack = get_camera_records(app, get_disabled=False)
+        except Exception as e:
+            # if we get an API error from Knack, just skip updating.
+            logger.debug("Error trying to fetch camera data from Knack, skipping updating.")
+            logger.debug(e)
+            await asyncio.sleep(SLEEP_SECONDS)
+            continue
+
         cam_ids = [camera.id for camera in cameras]
         for cam_data in cameras_knack:
             cam_id = cam_data.get(ID_FIELD)
