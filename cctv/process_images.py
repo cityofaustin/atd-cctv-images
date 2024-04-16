@@ -13,6 +13,7 @@ import aiobotocore
 import knackpy
 
 from camera import Camera
+from camera import SLEEP_SECONDS
 
 # environment
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -32,24 +33,35 @@ TIMEOUT_DEFAULT = 180
 INITIAL_MAX_RANDOM_SLEEP = 300
 
 
-def get_camera_records():
+def get_camera_records(app, get_disabled=False):
     """Download camera records from Knack app.
-
+    Args:
+        app: knackpy app object
+        get_disabled: if True, return disabled camera records instead
     Returns:
         list: list of knackpy.Records
     """
-    logger.debug("Getting cameras from Knack...")
-    filters = {
-        "match": "and",
-        "rules": [
-            {"field": IP_FIELD, "operator": "is not blank"},
-            {"field": ID_FIELD, "operator": "is not blank"},
-            {"field": MODEL_FIELD, "operator": "is not blank"},
-            {"field": DISABLE_PUBLISH_FIELD, "operator": "is not", "value": True},
-        ],
-    }
-    app = knackpy.App(app_id=KNACK_APP_ID, api_key=KNACK_API_KEY)
-    return app.get(KNACK_CONTAINER, filters=filters)
+
+    if get_disabled:
+        logger.debug("Fetching disabled cameras from Knack...")
+        filters = {
+            "match": "and",
+            "rules": [
+                {"field": DISABLE_PUBLISH_FIELD, "operator": "is", "value": True},
+            ],
+        }
+    else:
+        logger.debug("Fetching cameras from Knack...")
+        filters = {
+            "match": "and",
+            "rules": [
+                {"field": IP_FIELD, "operator": "is not blank"},
+                {"field": ID_FIELD, "operator": "is not blank"},
+                {"field": MODEL_FIELD, "operator": "is not blank"},
+                {"field": DISABLE_PUBLISH_FIELD, "operator": "is not", "value": True},
+            ],
+        }
+    return app.get(KNACK_CONTAINER, filters=filters, refresh=True)
 
 
 def create_camera(record, fallback_img):
@@ -96,6 +108,8 @@ async def worker(
     while True:
         if camera.is_disabled():
             logger.debug(f"{camera.id} is disabled")
+            # overwrite stale image with placeholder
+            await camera.upload(boto_client)
             # terminate work if camera reaches disabled state
             return
         try:
@@ -110,6 +124,67 @@ async def worker(
             logger.error(f"Camera {camera.id}: upload: {str(e)}")
         # pause for sleep duration
         await camera.sleep()
+
+
+async def update_camera_stack(app, cameras, session, boto_client):
+    """
+    Checks Knack to see if any cameras have been disabled or re-enabled by TPW staff.
+    Args:
+        app: knackpy app object
+        cameras: list of Camera objects
+        session (httpx.AsyncClient): The httpx session to use when fetching from cameras
+        boto_client (aiobotocore.session.AioSession): The (aio)boto3 session to upload images
+    """
+    fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
+    await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
+    while True:
+        logger.debug("Checking for disabled cameras from Knack...")
+
+        # getting disabled camera records from Knack
+        try:
+            cameras_knack = get_camera_records(app, get_disabled=True)
+        except Exception as e:
+            # if we get an API error from Knack, just skip updating.
+            logger.debug("Error trying to fetch camera data from Knack, skipping updating.")
+            logger.debug(e)
+            await asyncio.sleep(SLEEP_SECONDS)
+            continue
+
+        # Checking our published cameras to see if they were disabled
+        for cam_data in cameras_knack:
+            if cam_data.get(DISABLE_PUBLISH_FIELD):
+                cam_id = cam_data.get(ID_FIELD)
+                for camera in cameras:
+                    if camera.id == cam_id:
+                        camera.disable_camera()
+                        logger.debug(f"Camera {cam_id} was disabled by Knack.")
+
+        # refreshing our list of cameras
+        cameras = [camera for camera in cameras if not camera.is_disabled()]
+
+        # Now, check for cameras that were recently added or enabled
+        try:
+            cameras_knack = get_camera_records(app, get_disabled=False)
+        except Exception as e:
+            # if we get an API error from Knack, just skip updating.
+            logger.debug("Error trying to fetch camera data from Knack, skipping updating.")
+            logger.debug(e)
+            await asyncio.sleep(SLEEP_SECONDS)
+            continue
+
+        cam_ids = [camera.id for camera in cameras]
+        for cam_data in cameras_knack:
+            cam_id = cam_data.get(ID_FIELD)
+            if cam_id not in cam_ids:
+                logger.debug(f"Camera {cam_id} was re-enabled by Knack.")
+                cam_obj = create_camera(cam_data, fallback_img)
+                cam_worker = worker(cam_obj, session, boto_client)
+                cam_task = asyncio.create_task(cam_worker)
+                event_loop = asyncio.get_event_loop()
+                asyncio.ensure_future(cam_task, loop=event_loop)
+                cameras.append(cam_obj)
+
+        await asyncio.sleep(SLEEP_SECONDS)
 
 
 def load_fallback_img(fname):
@@ -128,7 +203,8 @@ async def main(timeout):
         timeout (int): The httpx session timeout (applied when downloading, not uploading images)
     """
     fallback_img = load_fallback_img(FALLBACK_IMG_NAME)
-    cameras_knack = get_camera_records()
+    app = knackpy.App(app_id=KNACK_APP_ID, api_key=KNACK_API_KEY)
+    cameras_knack = get_camera_records(app)
     cameras = [create_camera(record, fallback_img) for record in cameras_knack]
     tasks = []
 
@@ -148,6 +224,10 @@ async def main(timeout):
                 task_worker = worker(camera, session, boto_client)
                 task = asyncio.create_task(task_worker)
                 tasks.append(task)
+            # Task to check knack to see if any cameras were added or removed
+            knack_worker = update_camera_stack(app, cameras, session, boto_client)
+            knack_task = asyncio.create_task(knack_worker)
+            tasks.append(knack_task)
             # Concurrently run all tasks until they complete
             await asyncio.gather(*tasks, return_exceptions=True)
 
