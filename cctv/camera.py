@@ -82,6 +82,7 @@ class Camera(object):
         self.is_fallback_uploaded = False
         self.url = self._build_url()
         self.exception_count = 0
+        self.censored_camera = False
 
     def _build_url(self):
         """Of the known camera models currently in use, type `advidia` has a distinct url
@@ -105,12 +106,15 @@ class Camera(object):
     def is_disabled(self):
         return self.exception_count >= self.exception_limit
 
-    def disable_camera(self):
+    def is_censored(self):
+        return self.censored_camera
+
+    def censor_camera(self):
         """
-        Disables camera by increasing the exception count to the limit and removing any stored image.
+        Disabled camera by the MMC via Knack API and removing any stored image.
         """
         self.image = None
-        self.exception_count += self.exception_limit
+        self.censored_camera = True
 
     def _expiration_timestamp(self):
         """Formats an http-timestamp to be used in the `Expires` header. This header

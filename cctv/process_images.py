@@ -106,7 +106,7 @@ async def worker(
     # apply an initial random sleep to avoid overloading CPU with concurrent i/o on init
     await asyncio.sleep(random.uniform(0, INITIAL_MAX_RANDOM_SLEEP))
     while True:
-        if camera.is_disabled():
+        if camera.is_disabled() or camera.is_censored():
             logger.debug(f"{camera.id} is disabled")
             # overwrite stale image with placeholder
             await camera.upload(boto_client)
@@ -156,11 +156,11 @@ async def update_camera_stack(app, cameras, session, boto_client):
                 cam_id = cam_data.get(ID_FIELD)
                 for camera in cameras:
                     if camera.id == cam_id:
-                        camera.disable_camera()
+                        camera.censor_camera()
                         logger.debug(f"Camera {cam_id} was disabled by Knack.")
 
         # refreshing our list of cameras
-        cameras = [camera for camera in cameras if not camera.is_disabled()]
+        cameras = [camera for camera in cameras if not camera.is_censored()]
 
         # Now, check for cameras that were recently added or enabled
         try:
