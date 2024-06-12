@@ -47,7 +47,7 @@ The `launch.sh` script available in `/scripts` will launch a docker container th
 sudo docker run --name cctv-images \
   --network host \
   -d \
-  --env-file /home/publisher/atd-cctv-images/env_file \
+  --env-file /srv/publisher/atd-cctv-images/env_file \
   -v /var/log/cctv-images:/app/cctv/_log \
   atddocker/atd-cctv-images cctv/process_images.py
 ```
