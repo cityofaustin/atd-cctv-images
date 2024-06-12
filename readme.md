@@ -44,7 +44,7 @@ Configure environmental variables:
 The `launch.sh` script available in `/scripts` will launch a docker container that initiates `cctv/processs-images.py`. It also does the work of loading environmental variables and mounting the log directory:
 
 ```shell
-sudo docker run --name cctv-images \
+docker run --name cctv-images \
   --network host \
   -d \
   --env-file /srv/publisher/atd-cctv-images/env_file \

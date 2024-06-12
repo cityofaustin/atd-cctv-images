@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo docker run --name cctv-images \
+docker run --name cctv-images \
   --network host \
   -d \
   --env-file /srv/publisher/atd-cctv-images/env_file \
