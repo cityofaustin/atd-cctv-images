@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo docker restart "cctv-images"
+docker restart "cctv-images"
