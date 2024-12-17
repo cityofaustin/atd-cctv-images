@@ -6,7 +6,7 @@ Austin Transportation operates nearly 1,000 traffic cameras, which are used by t
 
 Although operations staff have access to live camera feeds, we have found it valuable to make intermittently-updated camera images available at a public HTTP endpoint. These images are incorporated into our own [operations dashboards](https://data.mobiltiy.austin.gov) and serve as a resource to the public, researchers, and 3rd-party services.
 
-This module fetches thumbnail images from the traffic cameras network and uploads them to a cloud-fronted AWS S3 bucket. 
+This module fetches thumbnail images from the traffic cameras network and uploads them to a cloud-fronted AWS S3 bucket.
 
 ## Resources
 
@@ -41,23 +41,18 @@ Configure environmental variables:
 - `KNACK_API_KEY`: The knack APP API key
 - `KNACK_CONTAINER`: The Knack container (aka, view ID) which exposes the asset records
 
-The `launch.sh` script available in `/scripts` will launch a docker container that initiates `cctv/processs-images.py`. It also does the work of loading environmental variables and mounting the log directory:
+The service is managed on the server via `systemd`. You can start/stop/restart the service like so:
 
-```shell
-docker run --name cctv-images \
-  --network host \
-  -d \
-  --env-file /srv/publisher/atd-cctv-images/env_file \
-  -v /var/log/cctv-images:/app/cctv/_log \
-  atddocker/atd-cctv-images cctv/process_images.py
 ```
-
-Once launched, a `cron` task can be deployed to run `/scripts/restart.sh`, which willl periodically restart the container and ensure that camera records are fetched.
+sudo systemctl start cctv-images
+sudo systemctl stop cctv-images
+sudo systemctl restart cctv-images
+```
 
 Logs are configured to rotate at `1mb`. If you've mounted the log directory to the container, you can tail them like so.
 
 ```
-$ tail -f /var/log/cctv-images/cctv.log 
+$ tail -f /var/log/cctv-images/cctv.log
 ```
 
 ## Development and CI
