@@ -49,6 +49,13 @@ sudo systemctl stop cctv-images
 sudo systemctl restart cctv-images
 ```
 
+The service needs to be restarted regularly to refresh the camera records. This is done via a systemd timer, which is set to run every night at 2AM. This behavior is controlled by the following files, found in `/etc/systemd/system`. Don't forget to reload the systemd daemon after making changes to these files.
+
+```
+cctv-images-restart.service
+cctv-images-restart.timer
+```
+
 Logs are configured to rotate at `1mb`. If you've mounted the log directory to the container, you can tail them like so.
 
 ```
