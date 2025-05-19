@@ -18,7 +18,7 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 ## Design
 
-The image processing is designed to be resilient to various connectivity and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially hault all concurrent tasks.
+The image processing is designed to be resilient to various connectivity and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially halt all concurrent tasks.
 
 The code relies on Python's [asyncio](https://docs.python.org/3/library/asyncio.html) ecosystem to achieve fast processing of hundreds of images per minute. The primary script--`process_images.py`--initiates concurrent, looping [`tasks`](https://docs.python.org/3/library/asyncio-task.html#task-object) which fetch and upload images from cameras.
 
