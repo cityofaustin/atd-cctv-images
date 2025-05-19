@@ -31,7 +31,7 @@ Each camera-task loops infinitely, sleeping for 5 minutes between each loop. Whe
 Configure environmental variables:
 
 - `AWS_ACCESS_KEY_ID`: The AWS access key ID
-- `AWS_SECRET_ACCESS_KEY`: The AWSS access key
+- `AWS_SECRET_ACCESS_KEY`: The AWS access key
 - `BUCKET`: The AWS destination bucket
 - `CAMERA_USERNAME`: The CCTV camera username
 - `CAMERA_PASSWORD`: The CCTV camera password
