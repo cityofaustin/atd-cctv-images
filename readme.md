@@ -18,7 +18,7 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 ## Design
 
-The image processing is designed to be resilient to various connectivity and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially hault all concurrent tasks.
+The image processing is designed to be resilient to various connectivity and interface issues related to external factors such as power loss, device failure, and device misconfiguration. The processing is further complicated by the fact that multiple makes and models of CCTV cameras are used on the network, each with their own API. Running asynchronous Python adds layer of complication because an uncaught worker failure can potentially halt all concurrent tasks.
 
 The code relies on Python's [asyncio](https://docs.python.org/3/library/asyncio.html) ecosystem to achieve fast processing of hundreds of images per minute. The primary script--`process_images.py`--initiates concurrent, looping [`tasks`](https://docs.python.org/3/library/asyncio-task.html#task-object) which fetch and upload images from cameras.
 
@@ -31,7 +31,7 @@ Each camera-task loops infinitely, sleeping for 5 minutes between each loop. Whe
 Configure environmental variables:
 
 - `AWS_ACCESS_KEY_ID`: The AWS access key ID
-- `AWS_SECRET_ACCESS_KEY`: The AWSS access key
+- `AWS_SECRET_ACCESS_KEY`: The AWS access key
 - `BUCKET`: The AWS destination bucket
 - `CAMERA_USERNAME`: The CCTV camera username
 - `CAMERA_PASSWORD`: The CCTV camera password
@@ -47,6 +47,13 @@ The service is managed on the server via `systemd`. You can start/stop/restart t
 sudo systemctl start cctv-images
 sudo systemctl stop cctv-images
 sudo systemctl restart cctv-images
+```
+
+The service needs to be restarted regularly to refresh the camera records. This is done via a systemd timer, which is set to run every night at 2AM. This behavior is controlled by the following files, found in `/etc/systemd/system`. Don't forget to reload the systemd daemon after making changes to these files.
+
+```
+cctv-images-restart.service
+cctv-images-restart.timer
 ```
 
 Logs are configured to rotate at `1mb`. If you've mounted the log directory to the container, you can tail them like so.
