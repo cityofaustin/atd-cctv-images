@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: Austin Traffic Camera Images
+  version: 1.0.0
+  description: |
+    Thumbnail images from traffic cameras operated by the City of Austin.
+    Each camera's latest image is refreshed about every 5 minutes.
+
+    Camera IDs, locations, and other metadata are published in the
+    [Traffic Cameras dataset](https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb/about_data).
+
+    Requests are rate limited to 1000 requests per five minutes per client.
+    Please cache images, avoid polling faster than the refresh interval,
+    and include a descriptive User-Agent header with contact information.
+  termsOfService: https://data.austintexas.gov/stories/s/ranj-cccq
+  contact:
+    name: City of Austin Transportation and Public Works
+    url: https://github.com/cityofaustin/atd-cctv-images
+externalDocs:
+  description: Traffic Cameras dataset (camera IDs and locations)
+  url: https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb/about_data
+servers:
+  - url: https://cctv.austinmobility.io
+paths:
+  /image/{camera_id}.jpg:
+    get:
+      summary: Get the latest image for a camera
+      operationId: getCameraImage
+      parameters:
+        - name: camera_id
+          in: path
+          required: true
+          description: Camera ID from the Traffic Cameras dataset.
+          schema:
+            type: integer
+            minimum: 1
+          example: 200
+      responses:
+        '200':
+          description: The camera's most recent thumbnail image.
+          headers:
+            Last-Modified:
+              description: When the image was last updated.
+              schema:
+                type: string
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '403':
+          description: |
+            Access denied. Returned when a client exceeds the rate limit,
+            and may also be returned for a camera ID that does not exist.
+        '404':
+          description: No image exists for this camera ID.
