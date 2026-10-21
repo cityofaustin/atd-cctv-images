@@ -13,6 +13,9 @@ info:
     Please cache images, avoid polling faster than the refresh interval,
     and include a descriptive User-Agent header with contact information.
   termsOfService: https://data.austintexas.gov/stories/s/ranj-cccq
+  license:
+    name: City of Austin Terms of Use
+    url: https://data.austintexas.gov/stories/s/ranj-cccq
   contact:
     name: City of Austin Transportation and Public Works
     url: https://github.com/cityofaustin/atd-cctv-images
@@ -26,6 +29,7 @@ paths:
     get:
       summary: Get the latest image for a camera
       operationId: getCameraImage
+      security: []
       parameters:
         - name: camera_id
           in: path
