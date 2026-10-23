@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Austin Traffic Camera Images</title>
+    <meta
+      name="description"
+      content="Public traffic camera thumbnail images published by the City of Austin Transportation and Public Works Department."
+    />
+  </head>
+  <body>
+    <main>
+      <h1>Austin Traffic Camera Images</h1>
+      <p>
+        This site hosts thumbnail images from traffic cameras operated by the
+        City of Austin. Images are refreshed every 5 minutes and are available to
+        the public.
+      </p>
+
+      <h2>Terms of use</h2>
+      <p>
+        Use of these images is subject to the
+        <a href="https://data.austintexas.gov/stories/s/ranj-cccq"
+          >City of Austin traffic camera terms of use</a
+        >. Please review them before using this data.
+      </p>
+
+      <h2>Fair use and rate limits</h2>
+      <p>
+        These images are provided as a free public resource. To keep the service
+        available for everyone, requests are rate limited to 1000 requests per 5
+        minutes per client. Clients that exceed this limit will receive an error
+        response and may be temporarily blocked.
+      </p>
+
+      <h2>Accessing images</h2>
+      <p>
+        Each camera's latest thumbnail is available at a URL based on its camera
+        ID:
+      </p>
+      <p><code>https://cctv.austinmobility.io/image/{camera_id}.jpg</code></p>
+      <p>
+        For example:
+        <a href="/image/200.jpg"
+          ><code>https://cctv.austinmobility.io/image/200.jpg</code></a
+        >
+      </p>
+
+      <h2>Camera locations and metadata</h2>
+      <p>
+        Camera IDs, locations, and other details are published in the
+        <a
+          href="https://data.austintexas.gov/Transportation-and-Mobility/Traffic-Cameras/b4k4-adkb/about_data"
+          >Traffic Cameras dataset</a
+        >
+        on the City of Austin Open Data Portal.
+      </p>
+
+      <footer>
+        Published by the City of Austin. Source code:
+        <a href="https://github.com/cityofaustin/atd-cctv-images"
+          >cityofaustin/atd-cctv-images</a
+        >
+      </footer>
+    </main>
+  </body>
+</html>
