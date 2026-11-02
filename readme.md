@@ -8,6 +8,10 @@ Although operations staff have access to live camera feeds, we have found it val
 
 This module fetches thumbnail images from the traffic cameras network and uploads them to a cloud-fronted AWS S3 bucket.
 
+### Terms of Use
+
+[Terms of Use for the City of Austin Open Data Portal](https://data.austintexas.gov/stories/s/ranj-cccq)
+
 ## Resources
 
 - Images are available at `https://cctv.austinmobility.io/image/< camera-id >.jpg`
