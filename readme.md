@@ -10,7 +10,7 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 ### Terms of Use
 
-[Terms of Use for the City of Austin Open Data Portal](https://data.austintexas.gov/stories/s/ranj-cccq)
+[Terms of Use for the City of Austin Open Data](https://data.austintexas.gov/stories/s/ranj-cccq)
 
 ## Resources
 
