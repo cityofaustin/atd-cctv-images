@@ -12,6 +12,10 @@ This module fetches thumbnail images from the traffic cameras network and upload
 
 [Terms of Use for the City of Austin Open Data](https://data.austintexas.gov/stories/s/ranj-cccq)
 
+### Fair use and rate limits
+
+These images are provided as a free public resource. To keep the service available for everyone, requests are rate limited to 1000 requests per 5 minutes per client. Clients that exceed this limit will receive an error response and may be temporarily blocked.
+
 ## Resources
 
 - Images are available at `https://cctv.austinmobility.io/image/< camera-id >.jpg`
